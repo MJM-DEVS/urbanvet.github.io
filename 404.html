@@ -3,27 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UrbanVet</title>
-  <script>
-    (function () {
-      var routeParam = 'route';
-      var knownRoutes = {
-        '/mobile-tierarztpraxis-berlin': true,
-        '/mobile-vet-berlin': true
-      };
-      var normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/';
-
-      if (!knownRoutes[normalizedPath]) {
-        return;
-      }
-
-      var target = new URL(window.location.origin + '/');
-      target.searchParams.set(routeParam, normalizedPath);
-      window.location.replace(target.toString());
-    })();
-  </script>
+  <meta http-equiv="refresh" content="0;url=https://urbanvet.de/" />
+  <title>UrbanVet - Redirecting</title>
 </head>
 <body>
-  <p>Redirecting...</p>
+  <p>Redirecting to UrbanVet...</p>
 </body>
 </html>
