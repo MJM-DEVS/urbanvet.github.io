@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -127,6 +128,19 @@ for (const f of fs.readdirSync(ROOT)) {
     fs.copyFileSync(path.join(ROOT, f), path.join(DIST, f));
   }
 }
+
+// --- self-hosted React (same version as the SSR render, no CDN) ---
+const vendorDir = path.join(DIST, 'vendor');
+fs.mkdirSync(vendorDir, { recursive: true });
+fs.copyFileSync(path.join(ROOT, 'node_modules/react/umd/react.production.min.js'), path.join(vendorDir, 'react.production.min.js'));
+fs.copyFileSync(path.join(ROOT, 'node_modules/react-dom/umd/react-dom.production.min.js'), path.join(vendorDir, 'react-dom.production.min.js'));
+
+// --- compile Tailwind to a static stylesheet (replaces the CDN runtime) ---
+const tailwindBin = path.join(ROOT, 'node_modules', '.bin', 'tailwindcss');
+execSync(
+  `"${tailwindBin}" -c "${path.join(ROOT, 'tailwind.config.cjs')}" -i "${path.join(ROOT, 'src', 'tailwind.css')}" -o "${path.join(DIST, 'styles.css')}" --minify`,
+  { cwd: ROOT, stdio: 'inherit' }
+);
 
 // --- 404 (SPA fallback that restores deep links via ?route=) ---
 const notFound = `<!DOCTYPE html>
