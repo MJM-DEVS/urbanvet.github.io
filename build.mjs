@@ -12,9 +12,15 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(ROOT, 'dist');
 
-// Base path the site is served under. '' = domain root (production),
-// '/urbanvet.github.io' = GitHub project-pages preview. Set via BASE_PATH env.
-const BASE = (process.env.BASE_PATH || '').replace(/\/$/, '');
+// Where is this being served?
+//  - Production = the repo on the custom domain (default) -> served at "/".
+//  - Staging    = the fork, served at a GitHub project subpath "/urbanvet.github.io".
+// Auto-detected via GITHUB_REPOSITORY so the SAME code + workflow is correct in
+// both repos with zero extra config. BASE_PATH env still overrides if needed.
+const STAGING_FORK = 'MJM-DEVS/urbanvet.github.io';
+const repo = process.env.GITHUB_REPOSITORY || '';
+const explicitBase = (process.env.BASE_PATH || '').replace(/\/$/, '');
+const BASE = explicitBase || (repo === STAGING_FORK ? '/urbanvet.github.io' : '');
 const STAGING = BASE !== '';
 
 // --- load the app in a Node sandbox (same source the browser runs) ---
@@ -115,9 +121,11 @@ for (const route of routes) {
 // --- client script + static assets ---
 fs.copyFileSync(path.join(ROOT, 'src', 'app.js'), path.join(DIST, 'app.js'));
 
-for (const f of ['CNAME']) {
-  const src = path.join(ROOT, f);
-  if (fs.existsSync(src)) fs.copyFileSync(src, path.join(DIST, f));
+// CNAME (custom domain) is deployed in production only; the staging fork must
+// not claim the domain (it would conflict with the production repo).
+if (!STAGING) {
+  const cname = path.join(ROOT, 'CNAME');
+  if (fs.existsSync(cname)) fs.copyFileSync(cname, path.join(DIST, 'CNAME'));
 }
 for (const d of ['assets', 'mobile-tierarztpraxis-berlin', 'mobile-vet-berlin']) {
   const src = path.join(ROOT, d);
