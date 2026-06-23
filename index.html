@@ -179,9 +179,27 @@ const SITE_PHONE = '0171 64 94 610';
 const SITE_PHONE_LINK = '+491716494610';
 const SITE_EMAIL = 'info@urbanvet.de';
 const DEFAULT_OG_IMAGE = 'logo-main.png';
-const LANGUAGE_HOME_PATHS = {
-  [Language.DE]: '/',
-  [Language.EN]: '/en'
+const PAGE_PATHS = {
+  [Language.DE]: {
+    [Page.HOME]: '/',
+    [Page.SERVICES]: '/leistungen',
+    [Page.ABOUT]: '/ueber-mich',
+    [Page.BLOG]: '/blog',
+    [Page.CONTACT]: '/kontakt',
+    [Page.IMPRESSUM]: '/impressum'
+  },
+  [Language.EN]: {
+    [Page.HOME]: '/en',
+    [Page.SERVICES]: '/en/services',
+    [Page.ABOUT]: '/en/about',
+    [Page.BLOG]: '/en/blog',
+    [Page.CONTACT]: '/en/contact',
+    [Page.IMPRESSUM]: '/en/imprint'
+  }
+};
+const BLOG_BASE_PATHS = {
+  [Language.DE]: '/blog',
+  [Language.EN]: '/en/blog'
 };
 const BOOKING_LINKS = {
   [Language.DE]: 'https://www.termin.vet/urbanvet/termin_buchen/de',
@@ -1083,39 +1101,88 @@ const setMetaByProperty = (property, content) => {
   if (element) element.setAttribute('content', content);
 };
 
-const getLanguageHomePath = (language) => LANGUAGE_HOME_PATHS[language] || LANGUAGE_HOME_PATHS[Language.DE];
+const getLanguageHomePath = (language) => (PAGE_PATHS[language] || PAGE_PATHS[Language.DE])[Page.HOME];
 
-const getRequestedPathname = () => {
-  const params = new URLSearchParams(window.location.search);
-  const redirectedPath = params.get(ROUTE_REDIRECT_PARAM);
-  return (redirectedPath || window.location.pathname).replace(/\/+$/, '') || '/';
-};
+// Reverse lookup: absolute path -> { language, page } for all static pages.
+const PATH_TO_NAV = (() => {
+  const map = {};
+  Object.keys(PAGE_PATHS).forEach((language) => {
+    Object.keys(PAGE_PATHS[language]).forEach((page) => {
+      map[PAGE_PATHS[language][page]] = { language, page };
+    });
+  });
+  return map;
+})();
+
+const normalizePath = (rawPath) =>
+  (rawPath || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
 
 const buildUrl = ({ language, page, post }) => {
-  const url = new URL(`${SITE_URL}${getLanguageHomePath(language)}`);
-  return url;
+  const pages = PAGE_PATHS[language] || PAGE_PATHS[Language.DE];
+  let path;
+  if (page === Page.BLOG_POST && post) {
+    const base = BLOG_BASE_PATHS[language] || BLOG_BASE_PATHS[Language.DE];
+    path = `${base}/${post.slug}`;
+  } else {
+    path = pages[page] || pages[Page.HOME];
+  }
+  return new URL(`${SITE_URL}${path}`);
+};
+
+// Translate a real pathname (or ?route= value) back into navigation intent.
+const resolveNavigationFromPath = (rawPath) => {
+  const path = normalizePath(rawPath);
+
+  const staticMatch = PATH_TO_NAV[path];
+  if (staticMatch) {
+    return { language: staticMatch.language, page: staticMatch.page, postSlug: null };
+  }
+
+  const enBlogPrefix = `${BLOG_BASE_PATHS[Language.EN]}/`;
+  const deBlogPrefix = `${BLOG_BASE_PATHS[Language.DE]}/`;
+  if (path.startsWith(enBlogPrefix)) {
+    return { language: Language.EN, page: Page.BLOG_POST, postSlug: path.slice(enBlogPrefix.length) };
+  }
+  if (path.startsWith(deBlogPrefix)) {
+    return { language: Language.DE, page: Page.BLOG_POST, postSlug: path.slice(deBlogPrefix.length) };
+  }
+
+  const language = path === '/en' || path.startsWith('/en/') ? Language.EN : Language.DE;
+  return { language, page: Page.HOME, postSlug: null };
 };
 
 const getInitialNavigationState = () => {
   const params = new URLSearchParams(window.location.search);
-  const requestedLanguage = params.get('lang');
-  const normalizedPath = getRequestedPathname();
-  const language = requestedLanguage === 'en'
-    ? Language.EN
-    : requestedLanguage === 'de'
-      ? Language.DE
-      : normalizedPath.endsWith(getLanguageHomePath(Language.EN))
-        ? Language.EN
-        : Language.DE;
-  const pageParam = params.get('page');
-  const postSlug = params.get('post');
-  const requestedPage = QUERY_PAGE_MAP[pageParam] || Page.HOME;
+  const routeParam = params.get(ROUTE_REDIRECT_PARAM);
+  const langParam = params.get('lang');
+
+  let language;
+  let requestedPage;
+  let postSlug;
+
+  // Local file:// preview has no real paths, so keep using explicit query params.
+  if (!routeParam && window.location.protocol === 'file:') {
+    language = langParam === 'en' ? Language.EN : Language.DE;
+    requestedPage = QUERY_PAGE_MAP[params.get('page')] || Page.HOME;
+    postSlug = params.get('post');
+  } else {
+    const resolved = resolveNavigationFromPath(routeParam || window.location.pathname);
+    language = resolved.language;
+    requestedPage = resolved.page;
+    postSlug = resolved.postSlug;
+    if (langParam === 'en') language = Language.EN;
+    else if (langParam === 'de') language = Language.DE;
+  }
+
   const availablePosts = ALL_POSTS[language];
   const selectedPost = postSlug ? availablePosts.find((post) => post.slug === postSlug) || null : null;
+  const resolvedPage = selectedPost
+    ? Page.BLOG_POST
+    : (requestedPage === Page.BLOG_POST ? Page.BLOG : requestedPage);
 
   return {
     language,
-    currentPage: selectedPost ? Page.BLOG_POST : requestedPage,
+    currentPage: resolvedPage,
     currentPost: selectedPost
   };
 };
