@@ -25,10 +25,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-        env:
-          # Fork preview deploys to the project-pages subpath. For production
-          # on the apex domain, remove this (BASE_PATH defaults to '').
-          BASE_PATH: /urbanvet.github.io
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
